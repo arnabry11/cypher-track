@@ -1,55 +1,70 @@
 # Cypher Track
 
-An Android first, two-button fork of [Traccar Client](https://github.com/traccar/traccar-client) for trips made by a sales team. The application uses the open-source Traccar Client SDK for background tracking and offline position buffering. The server URL and tracking policy are embedded in the app; the salesperson sees a device identifier, trip timer, Start Trip, and End Trip. The screen uses a high-contrast, soft light palette outdoors and a dark palette when the phone is in dark mode.
+Cypher Track is an Android-first, two-button fork of [Traccar Client](https://github.com/traccar/traccar-client) for a sales team. The salesperson sees a device identifier, a trip timer, Start Trip, and End Trip. The screen uses a soft, high-contrast light palette outdoors and a dark palette when the phone is in dark mode.
 
-This repository is a fork, with `upstream` pointing to Traccar. The [agent guidance](AGENTS.md) describes the privacy rules; the remaining work is listed below.
+The app uses the Traccar Client SDK for background location tracking and offline GPS buffering. It does not send separate trip start/end markers or `tripId`/`tripState` attributes. The Traccar dashboard can be used to review each device's location history.
 
-## Current build status
+## Embedded tracking policy
 
-- The app starts and stops the SDK only through the trip controller. On launch it stops an orphaned tracking session if no trip is stored. It does not initialize Traccar's push commands, deep links, quick actions, Firebase, or settings screen.
-- The configured URL is `https://tracking.arnabroy.co.in/`; accuracy is High, distance is 50 m, stationary heartbeat is off, offline buffering is on, Android system location is on, and stop detection is on.
-- Start and end markers carry `tripId`, `tripState`, and `tripEventAt` as OsmAnd custom attributes. If sending fails, markers stay in app storage and are retried every 30 seconds while the app runs, and on the next app launch. They do not request a location fix. A metadata-only marker inherits the previous GPS fix time in Traccar; use its device time or `tripEventAt` to read the boundary time.
-- **Experimental limitation:** the stock SDK does not yet attach `tripId` to every normal position. Its offline queue also lacks a field for it. A small SDK fork is required before we can claim that every point is tagged or that offline marker delivery is automatic while the app remains closed. Do not deploy this build to the sales team until that work and phone tests are complete.
-- The user confirmed the root URL works in the official client. A form POST to this URL was also accepted by the live Traccar server, and a test position showed both custom attributes in the Traccar UI. A physical phone test is still required before deployment.
+| Setting | Value |
+| --- | --- |
+| Server | `https://tracking.arnabroy.co.in/` |
+| Accuracy | High |
+| Distance | 50 metres |
+| Stationary heartbeat | Off |
+| Offline position buffering | On |
+| Android system location provider | On |
+| Stop detection | On |
 
-## Test it on your Android phone
+Only Start Trip starts the tracker. End Trip waits for the SDK to stop before the app shows tracking as off; it does not request another location. On launch, an orphaned tracking session with no stored trip is stopped. Push commands, deep links, shortcuts, and settings cannot start tracking. GPS points collected before End Trip may still upload later from the SDK's offline buffer; check the GPS fix time, not the server receipt time, when testing this boundary.
 
-You do not need to know Android development to run a debug copy. Flutter and Android command-line tools are needed on the Mac. Run `flutter doctor` first; its Android toolchain section should have a check mark. If it does not, install Android Studio and let it install the Android SDK, then run `flutter doctor --android-licenses` and accept the Android licenses.
+## Install the signed test release
 
-1. On the phone, open **Settings → About phone**, tap **Build number** seven times, then enable **USB debugging** in **Developer options**. The exact Settings path varies by phone.
-2. Connect the phone by USB and approve its debugging prompt. On the Mac, run `flutter devices`; your phone should be listed.
-3. In Terminal, run:
+The release APK is `build/app/outputs/flutter-apk/app-release.apk`. It is a universal Android APK, not the earlier debug APK with a test device identifier. Release builds generate a different eight-digit identifier for each new installation and show it on the home screen. The package is `co.in.arnabroy.cyphertrack`.
 
-   ```sh
-   cd /Users/arnab/my_experiments/android/cypher-track
-   flutter pub get
-   flutter test
-   flutter run
-   ```
+1. First let the old debug build upload any offline positions. Then uninstall it: Android will not install this differently signed release over a debug-signed copy. Uninstalling clears its local data and generates a new identifier.
+2. Share the signed APK with a salesperson by a trusted channel. On the phone, open it and allow installation from that source when Android asks.
+3. Open Cypher Track, read its Device Identifier, and add a Traccar device with exactly that identifier to the Salesmen group. Set its `employeeId` and `employeeName` device attributes. Do this separately for each phone. A reinstall creates a new identifier and needs a new Traccar device registration.
+4. Grant Precise Location, background location, and notification permissions when requested. Keep Location enabled. For the reliability test, allow unrestricted battery use; later compare battery use on the phone's normal policy.
 
-   If Flutter lists several devices, use `flutter run -d DEVICE_ID` with the ID from `flutter devices`.
+Do not share the old debug APK or run the official Traccar Client with the same test identifier during a test.
 
-   For a debug build on the already registered test device, run `flutter run --dart-define=CYPHER_TEST_DEVICE_ID=YOUR_TEST_ID`. Do not leave the official Traccar Client tracking with that same ID at the same time. Release builds ignore this override and generate their own ID.
+## Field-test checklist
 
-4. The app appears as **Cypher Track**, alongside the official Traccar Client. Read the **Device Identifier** on the screen. In your Traccar server, add a device with that exact identifier under the Salesmen group, then set its `employeeId` and `employeeName` device attributes.
-5. Tap **Start Trip** and grant the requested location permissions. Allow background location and unrestricted battery use for reliable tracking. Walk outdoors for at least 100–200 metres. Open Traccar and check the device's position history.
-6. Tap **End Trip**. Walk farther and check that no newly *collected* points appear after the end time. Previously buffered points from the trip may arrive later with earlier timestamps.
-7. Repeat while offline: start a trip, disconnect mobile data/Wi-Fi but leave Location enabled, walk, end the trip, then reconnect. Check that historical trip points arrive, and that none has a timestamp after End Trip.
-8. Close and reopen the app during a trip; the timer should continue from the original start time. Close and reopen it after End Trip; tracking should remain off.
+Run these checks on at least one real phone before a team rollout. Use Traccar's position **fix time** to distinguish collection time from a delayed offline upload.
 
-If a device shows no positions, check its identifier, permissions, Traccar logs, and the HTTPS proxy route. The configured root URL was verified to accept an OsmAnd form POST on this server.
+| Scenario | Expected result |
+| --- | --- |
+| Fresh install | Unique displayed identifier; no tracking before Start Trip. |
+| Outdoor trip, screen on | Start Trip enables End Trip and timer; positions appear after moving more than 50 m. |
+| Screen off and app in background | Tracking continues with Android's location service notification. |
+| Stationary for several minutes, then move | Stop detection conserves power; positions resume on movement. |
+| Offline during a trip | The timer continues; positions collected offline arrive after reconnecting. |
+| End while offline, then reconnect | No new GPS fixes after End Trip; earlier buffered fixes may arrive later. |
+| End online, then keep walking | No new GPS fixes after End Trip. |
+| Swipe app away, reopen during a trip | Tracking and the original timer continue. Android's explicit **Force stop** is different and suspends app work until reopened. |
+| Reboot during a trip | Tracking and timer recover after boot, subject to the phone's background restrictions. |
+| Reopen after End Trip | Tracking stays off and End Trip is disabled. |
+| Deny or revoke a required permission | Start fails visibly; the app must not falsely show an active trip. |
+| Second salesperson's phone | It has a different identifier and separate position history. |
 
-To build an installable debug APK instead of using `flutter run`, run `flutter build apk --debug`. The resulting file is `build/app/outputs/flutter-apk/app-debug.apk`. Debug APKs are for testing; a release build needs its own signing key and a completed privacy and offline test pass.
+On the phone, also check battery use over a representative workday. Manufacturer battery policies vary, so a successful test on one phone does not guarantee identical background behavior on every model. Do not distribute beyond the test group until the relevant scenarios pass.
 
-## Development
+## Rebuild a signed release
+
+Flutter, Android SDK, and JDK 17 are needed on the Mac. The release keystore lives outside this public repository at `../.cypher-track-signing/release.jks`; its password is stored in the macOS Keychain as service `co.in.arnabroy.cyphertrack.release` for account `cypher-track`. Back up both securely. **Without the same signing key, Android will not accept future APKs as updates to existing installations.** Increment the version in `pubspec.yaml` for each later release.
 
 ```sh
-dart format lib test
+cd /Users/arnab/my_experiments/android/cypher-track
+export CYPHER_TRACK_SIGNING_STORE="$PWD/../.cypher-track-signing/release.jks"
+export CYPHER_TRACK_SIGNING_PASSWORD="$(security find-generic-password -a cypher-track -s co.in.arnabroy.cyphertrack.release -w)"
 flutter analyze
 flutter test
+flutter build apk --release
+unset CYPHER_TRACK_SIGNING_PASSWORD
 ```
 
-`origin` uses the `github.com-personal` SSH alias, which selects the owner's existing personal key. Private keys, signing keys, and tokens must never be copied into this repository.
+Keep the keystore, password, and APK out of Git. The app source is a fork with `upstream` pointing to Traccar; review upstream SDK and permission changes before merging updates. See [AGENTS.md](AGENTS.md) for development invariants.
 
 ## License and attribution
 
