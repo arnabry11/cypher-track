@@ -7,13 +7,13 @@ This is an Android first Flutter fork of Traccar Client. Preserve a clean route 
 - Location collection is initiated only by the salesperson's Start Trip action.
 - End Trip must call and await the tracking SDK's stop operation before the app reports that the trip ended. Do not request a new position afterward.
 - No deep link, shortcut, push message, boot path, or diagnostics action may initiate collection when there is no active trip.
-- Offline positions collected during a trip may upload later. Record trip metadata at collection time; never infer it from whichever trip is active at upload time.
+- Offline positions collected during a trip may upload later. Never request a fresh location fix after End Trip.
 - Never log coordinates, server credentials, SSH keys, or other employee data in analytics or crash reports.
 
 ## Flutter and Dart practices
 
 - Run `dart format`, `flutter analyze`, and focused `flutter test` before proposing a change.
-- Keep widgets declarative and free of network and persistence logic. Put the trip state machine behind a small controller with injected tracker, storage, clock, and marker interfaces so it is testable.
+- Keep widgets declarative and free of network and persistence logic. Put the trip state machine behind a small controller with injected tracker, storage, and clock so it is testable.
 - Persist UTC timestamps and derive elapsed time from the persisted start time. Do not accumulate timer ticks as the source of truth.
 - Check `mounted` after awaited work before calling `setState` or using a `BuildContext`.
 - Disable conflicting actions while start or end is pending; show an actionable error if an SDK call fails.

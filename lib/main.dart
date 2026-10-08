@@ -18,14 +18,7 @@ Future<void> main() async {
   }
   await tracker.setConfig(config);
 
-  final trips = TripController(
-    tracker: SdkTripTracker(tracker),
-    store: store,
-    markerSender: OsmAndTripMarkerSender(
-      serverUrl: Uri.parse(config.serverUrl),
-      deviceId: config.deviceId,
-    ),
-  );
+  final trips = TripController(tracker: SdkTripTracker(tracker), store: store);
   await trips.initialize();
   runApp(CypherTrackApp(trips: trips, deviceId: config.deviceId));
 }

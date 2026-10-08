@@ -1,16 +1,14 @@
-import java.util.Properties
-import java.io.FileInputStream
-
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-val keystoreProperties = Properties()
-val keystorePropertiesFile = rootProject.file("../../environment/key.properties")
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+val signingStore = System.getenv("CYPHER_TRACK_SIGNING_STORE")
+val signingPassword = System.getenv("CYPHER_TRACK_SIGNING_PASSWORD")
+val hasReleaseSigning = !signingStore.isNullOrBlank() && !signingPassword.isNullOrBlank()
+if (gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) } && !hasReleaseSigning) {
+    throw GradleException("Release signing requires CYPHER_TRACK_SIGNING_STORE and CYPHER_TRACK_SIGNING_PASSWORD")
 }
 
 android {
@@ -34,18 +32,18 @@ android {
     }
 
     signingConfigs {
-        if (keystorePropertiesFile.exists()) {
+        if (hasReleaseSigning) {
             create("release") {
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile = keystoreProperties["storeFile"]?.let { file(it) }
-                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = "cypher-track"
+                keyPassword = signingPassword
+                storeFile = file(signingStore!!)
+                storePassword = signingPassword
             }
         }
     }
     buildTypes {
         release {
-            if (keystorePropertiesFile.exists()) {
+            if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }
             isShrinkResources = false

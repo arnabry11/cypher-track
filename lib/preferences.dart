@@ -22,9 +22,9 @@ class Preferences {
   static const String stopDetection = 'stop_detection';
   static const String preferPlatformProviders = 'prefer_platform_providers';
   static const String password = 'password';
-  static const String activeTripId = 'active_trip_id';
+  static const String _legacyActiveTripId = 'active_trip_id';
   static const String activeTripStartedAt = 'active_trip_started_at';
-  static const String pendingTripMarkers = 'pending_trip_markers';
+  static const String _legacyPendingTripMarkers = 'pending_trip_markers';
 
   static Future<void> init() async {
     _initFuture ??= _createInstance();
@@ -54,9 +54,9 @@ class Preferences {
           stopDetection,
           preferPlatformProviders,
           password,
-          activeTripId,
+          _legacyActiveTripId,
           activeTripStartedAt,
-          pendingTripMarkers,
+          _legacyPendingTripMarkers,
         },
       ),
     );
@@ -70,6 +70,10 @@ class Preferences {
         }
       }
     }
+    // Remove unsent metadata markers from older builds. Normal GPS buffering
+    // belongs to the SDK and is intentionally untouched.
+    await instance.remove(_legacyActiveTripId);
+    await instance.remove(_legacyPendingTripMarkers);
     if (instance.getString(id) == null) {
       await instance.setString(
         id,
