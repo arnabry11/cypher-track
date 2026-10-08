@@ -13,11 +13,11 @@ internal fun coreModule(): Module = module {
     single { ComponentCoroutineScope() }
 
     single<Uploader> { HttpUploader(get(), get()) }
-    single { LocationFilter(get(), get()) }
+    single { LocationFilter(get(), get<StateStore>()) }
 
     single {
         TrackerEngine(
-            stateStore = get(),
+            stateStore = get<StateStore>(),
             queue = get(),
             network = get(),
             locationSource = get(),

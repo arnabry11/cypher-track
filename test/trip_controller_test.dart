@@ -77,8 +77,8 @@ void main() {
     expect(config.serverUrl, 'https://tracking.arnabroy.co.in/');
     expect(config.deviceId, testDeviceId.isEmpty ? isNotEmpty : testDeviceId);
     expect(config.location.accuracy, Accuracy.high);
-    expect(config.location.distanceMeters, 50);
-    expect(config.location.heartbeatIntervalSeconds, 0);
+    expect(config.location.distanceMeters, 75);
+    expect(config.location.heartbeatIntervalSeconds, 300);
     expect(config.location.stopDetection, isTrue);
     expect(config.buffer, isTrue);
     expect(config.preferPlatformProviders, isTrue);

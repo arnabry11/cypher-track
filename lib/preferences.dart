@@ -92,8 +92,8 @@ class Preferences {
               : instance.getString(id) ?? '',
       location: LocationConfig(
         accuracy: Accuracy.high,
-        distanceMeters: 50,
-        heartbeatIntervalSeconds: 0,
+        distanceMeters: 75,
+        heartbeatIntervalSeconds: 300,
         stopDetection: true,
       ),
       buffer: true,

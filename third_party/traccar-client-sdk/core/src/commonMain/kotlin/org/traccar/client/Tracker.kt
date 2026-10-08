@@ -23,7 +23,9 @@ class Tracker internal constructor(
 
     suspend fun start() = sharedMutex.withLock {
         Log.log("Tracker start ${config.serverUrl} ${config.deviceId}")
-        stateStore.update { it.copy(enabled = true) }
+        // A new trip must not be filtered against the last position of an old trip.
+        // TrackerEngine obtains a fresh fix and sends it through the normal queue.
+        stateStore.update(State::forNewTrackingPeriod)
     }
 
     suspend fun stop() = sharedMutex.withLock {
@@ -52,6 +54,9 @@ class Tracker internal constructor(
         bootstrap(newConfig)
     }
 }
+
+internal fun State.forNewTrackingPeriod(): State =
+    copy(enabled = true, paused = false, lastAcceptedLocation = null)
 
 private val sharedMutex = Mutex()
 private var sharedTrackerInstance: Tracker? = null

@@ -44,9 +44,9 @@ internal actual fun platformModule(): Module = module {
             if (config.location.stopDetection) {
                 add(get<ActivityRecognitionDetector>())
                 add(get<GeofenceDetector>())
-                if (config.location.heartbeatIntervalSeconds > 0) {
-                    add(get<AlarmHeartbeatTrigger>())
-                }
+            }
+            if (config.location.heartbeatIntervalSeconds > 0) {
+                add(get<AlarmHeartbeatTrigger>())
             }
             if (config.wakeLock) {
                 add(get<WakeLockHolder>())

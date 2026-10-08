@@ -16,7 +16,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class TrackerEngine internal constructor(
-    private val stateStore: StateStore,
+    private val stateStore: TrackingStateStore,
     private val queue: PositionQueue,
     private val network: NetworkMonitor,
     private val locationSource: LocationSource,
@@ -62,15 +62,20 @@ class TrackerEngine internal constructor(
 
     private suspend fun applyHeartbeatTick() {
         val state = stateStore.state.value
-        if (!state.enabled || !state.paused) return
+        if (!state.enabled) return
         Log.log("HeartbeatTick")
-        val position = locationSource.fetchOnce()
+        val position = locationSource.fetchFreshOnce(Clock.System.now().toEpochMilliseconds())
+            ?.copy(forceReport = true)
             ?: Position(time = Clock.System.now().toEpochMilliseconds())
         heartbeatPositions.emit(position)
     }
 
     private suspend fun pipelineLoop() {
-        merge(locationSource.positions, heartbeatPositions).collect { incoming ->
+        merge(
+            locationSource.positions,
+            initialFixes(stateStore.state, locationSource),
+            heartbeatPositions,
+        ).collect { incoming ->
             if (!stateStore.state.value.enabled) return@collect
             var current: Position? = incoming
             for (processor in processors) {

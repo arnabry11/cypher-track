@@ -32,10 +32,10 @@ class AlarmHeartbeatTrigger(
         scope.launch {
             HeartbeatReceiver.events.collect {
                 signals.emit(Signal.HeartbeatTick)
-                if (state.value.enabled && state.value.paused) scheduleNext()
+                if (state.value.enabled) scheduleNext()
             }
         }
-        scope.observeState(state, { it.enabled && it.paused }, inactive = false) { active ->
+        scope.observeState(state, State::enabled, inactive = false) { active ->
             if (active) scheduleNext() else cancelScheduled()
         }
     }

@@ -71,6 +71,15 @@ class FusedLocationSource(
         null
     }
 
+    override suspend fun fetchFreshOnce(sinceMillis: Long): Position? = try {
+        awaitCurrentLocation(maxUpdateAgeMillis = 0L)
+            ?.takeIf { it.time >= sinceMillis }
+            ?.toPosition()
+    } catch (e: SecurityException) {
+        Log.log("Location permission missing: $e")
+        null
+    }
+
     private fun startUpdates(locationConfig: LocationConfig) {
         val newCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
@@ -97,14 +106,15 @@ class FusedLocationSource(
         callback = null
     }
 
-    private suspend fun awaitCurrentLocation(): Location? {
+    private suspend fun awaitCurrentLocation(maxUpdateAgeMillis: Long? = null): Location? {
         currentLocationToken?.cancel()
         val token = CancellationTokenSource()
         currentLocationToken = token
-        val request = CurrentLocationRequest.Builder()
+        val requestBuilder = CurrentLocationRequest.Builder()
             .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
             .setDurationMillis(LOCATION_FETCH_TIMEOUT.inWholeMilliseconds)
-            .build()
+        maxUpdateAgeMillis?.let(requestBuilder::setMaxUpdateAgeMillis)
+        val request = requestBuilder.build()
         return try {
             suspendCancellableCoroutine { continuation ->
                 client.getCurrentLocation(request, token.token)

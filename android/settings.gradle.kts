@@ -23,3 +23,11 @@ plugins {
 }
 
 include(":app")
+
+// Build the small Cypher Track SDK patch from source so initial fixes use the
+// SDK's persistent offline queue. The upstream Flutter wrapper stays pinned.
+includeBuild("../third_party/traccar-client-sdk") {
+    dependencySubstitution {
+        substitute(module("org.traccar:traccar-client-sdk")).using(project(":core"))
+    }
+}

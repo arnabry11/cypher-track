@@ -10,17 +10,22 @@ import kotlin.math.sqrt
 
 class LocationFilter(
     config: Config,
-    private val stateStore: StateStore,
+    private val stateStore: TrackingStateStore,
 ) : PositionProcessor {
 
     private val locationConfig: LocationConfig = config.location
-    private var lastAccepted: Position? = stateStore.state.value.lastAcceptedLocation
     private var lastProcessedPaused: Boolean = stateStore.state.value.paused
 
     override suspend fun process(position: Position): Position? {
         if (position.latitude == null || position.longitude == null) {
             Log.log("Heartbeat accepted")
             return position
+        }
+        if (position.forceReport) {
+            val accepted = position.copy(forceReport = false)
+            persistAccepted(accepted)
+            Log.log("Heartbeat location accepted ${accepted.latitude},${accepted.longitude}")
+            return accepted
         }
         val currentPaused = stateStore.state.value.paused
         if (currentPaused != lastProcessedPaused) {
@@ -29,7 +34,9 @@ class LocationFilter(
             Log.log("Transition accepted ${position.latitude},${position.longitude}")
             return position
         }
-        val previous = lastAccepted
+        // Read the persisted state so Tracker.start() can reset the threshold
+        // without rebuilding this processor between trips.
+        val previous = stateStore.state.value.lastAcceptedLocation
         if (previous == null) {
             persistAccepted(position)
             Log.log("Location accepted ${position.latitude},${position.longitude}")
@@ -51,7 +58,6 @@ class LocationFilter(
     }
 
     private suspend fun persistAccepted(position: Position) {
-        lastAccepted = position
         stateStore.update { it.copy(lastAcceptedLocation = position) }
     }
 

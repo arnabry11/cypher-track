@@ -18,6 +18,9 @@ internal val LOCATION_FETCH_TIMEOUT: Duration = 30.seconds
 interface LocationSource {
     val positions: Flow<Position>
     suspend fun fetchOnce(): Position?
+
+    suspend fun fetchFreshOnce(sinceMillis: Long): Position? =
+        fetchOnce()?.takeIf { it.time >= sinceMillis }
 }
 
 internal enum class LocationMode { Off, Active, Stationary }

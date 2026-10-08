@@ -70,6 +70,13 @@ class AndroidLocationSource(
         null
     }
 
+    override suspend fun fetchFreshOnce(sinceMillis: Long): Position? = try {
+        withTimeoutOrNull(LOCATION_FETCH_TIMEOUT) { awaitFreshLocation(sinceMillis) }?.toPosition()
+    } catch (e: SecurityException) {
+        Log.log("Location permission missing: $e")
+        null
+    }
+
     private fun startUpdates() {
         val newListener = LocationListenerCompat { location ->
             positions.tryEmit(location.toPosition())
@@ -113,6 +120,25 @@ class AndroidLocationSource(
             if (currentLocationCancellation === signal) currentLocationCancellation = null
         }
     }
+
+    private suspend fun awaitFreshLocation(sinceMillis: Long): Location =
+        suspendCancellableCoroutine { continuation ->
+            val listener = object : LocationListenerCompat {
+                override fun onLocationChanged(location: Location) {
+                    if (location.time < sinceMillis) return
+                    locationManager.removeUpdates(this)
+                    if (continuation.isActive) continuation.resume(location)
+                }
+            }
+            locationManager.requestLocationUpdates(
+                locationConfig.accuracy.toAndroidProvider(),
+                0L,
+                0f,
+                listener,
+                Looper.getMainLooper(),
+            )
+            continuation.invokeOnCancellation { locationManager.removeUpdates(listener) }
+        }
 
     private fun Location.toPosition(): Position = Position(
         latitude = latitude,

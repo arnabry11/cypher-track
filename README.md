@@ -10,13 +10,17 @@ The app uses the Traccar Client SDK for background location tracking and offline
 | --- | --- |
 | Server | `https://tracking.arnabroy.co.in/` |
 | Accuracy | High |
-| Distance | 50 metres |
-| Stationary heartbeat | Off |
+| Distance | 75 metres |
+| Heartbeat | About every 5 minutes during an active trip when movement has not already produced an update |
 | Offline position buffering | On |
 | Android system location provider | On |
 | Stop detection | On |
 
 Only Start Trip starts the tracker. End Trip waits for the SDK to stop before the app shows tracking as off; it does not request another location. On launch, an orphaned tracking session with no stored trip is stopped. Push commands, deep links, shortcuts, and settings cannot start tracking. GPS points collected before End Trip may still upload later from the SDK's offline buffer; check the GPS fix time, not the server receipt time, when testing this boundary.
+
+Each Start Trip now asks for a new GPS fix without waiting for 75 metres of movement. The fix is accepted only if it was obtained after tracking started, and it enters the SDK's normal offline queue. GPS acquisition can still take time outdoors, and the phone must have a fix before anything can be sent. Later positions use the 75-metre distance policy. A new trip does not inherit the previous trip's distance threshold.
+
+While a trip is active, the SDK schedules a heartbeat every five minutes, including when the phone is stationary. If no recent movement update has been sent, it obtains a fresh location; if no fix is available, it sends a heartbeat without coordinates. Android may defer alarms in deep sleep, so five minutes is a requested cadence rather than an exact guarantee. End Trip cancels future heartbeats; already buffered reports can still upload later.
 
 ## Install the signed test release
 
@@ -36,10 +40,13 @@ Run these checks on at least one real phone before a team rollout. Use Traccar's
 | Scenario | Expected result |
 | --- | --- |
 | Fresh install | Unique displayed identifier; no tracking before Start Trip. |
-| Outdoor trip, screen on | Start Trip enables End Trip and timer; positions appear after moving more than 50 m. |
+| Outdoor trip, screen on | Start Trip enables End Trip and timer; the first fix appears without moving 75 m, once GPS has a fresh fix. Later positions follow the 75 m rule. |
+| Second trip from the same place | A new starting fix appears even if the previous trip ended less than 75 m away. |
 | Screen off and app in background | Tracking continues with Android's location service notification. |
-| Stationary for several minutes, then move | Stop detection conserves power; positions resume on movement. |
+| Stationary for several minutes, then move | Stop detection conserves power; a heartbeat is sent about every 5 minutes while stationary, and regular positions resume on movement. |
+| End Trip while stationary | No new heartbeat or GPS request after End Trip. |
 | Offline during a trip | The timer continues; positions collected offline arrive after reconnecting. |
+| Start while offline and stationary outdoors | The starting fix is buffered and arrives after reconnecting, even without moving 75 m. |
 | End while offline, then reconnect | No new GPS fixes after End Trip; earlier buffered fixes may arrive later. |
 | End online, then keep walking | No new GPS fixes after End Trip. |
 | Swipe app away, reopen during a trip | Tracking and the original timer continue. Android's explicit **Force stop** is different and suspends app work until reopened. |
@@ -54,12 +61,16 @@ On the phone, also check battery use over a representative workday. Manufacturer
 
 Flutter, Android SDK, and JDK 17 are needed on the Mac. The release keystore lives outside this public repository at `../.cypher-track-signing/release.jks`; its password is stored in the macOS Keychain as service `co.in.arnabroy.cyphertrack.release` for account `cypher-track`. Back up both securely. **Without the same signing key, Android will not accept future APKs as updates to existing installations.** Increment the version in `pubspec.yaml` for each later release.
 
+The pinned Flutter wrapper still uses Traccar Client SDK 1.1.1. The Android build substitutes `third_party/traccar-client-sdk` (copied from upstream tag `v1.1.1`, commit `69dc67b`) for the native SDK. Only the start-fix/reset behavior and the minimum build/test setup are changed there. This keeps the app fork's tracking customization isolated when pulling Traccar Client updates. The Android SDK location must be available through `ANDROID_HOME`, including for the included SDK build.
+
 ```sh
 cd /Users/arnab/my_experiments/android/cypher-track
 export CYPHER_TRACK_SIGNING_STORE="$PWD/../.cypher-track-signing/release.jks"
 export CYPHER_TRACK_SIGNING_PASSWORD="$(security find-generic-password -a cypher-track -s co.in.arnabroy.cyphertrack.release -w)"
+export ANDROID_HOME="$(sed -n 's/^sdk.dir=//p' android/local.properties)"
 flutter analyze
 flutter test
+JAVA_HOME="$(/usr/libexec/java_home -v 17)" android/gradlew -p third_party/traccar-client-sdk :core:testAndroidHostTest
 flutter build apk --release
 unset CYPHER_TRACK_SIGNING_PASSWORD
 ```

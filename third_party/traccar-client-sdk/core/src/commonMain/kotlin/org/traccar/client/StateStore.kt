@@ -15,11 +15,11 @@ import org.traccar.client.db.StateQueries
 class StateStore internal constructor(
     private val queries: StateQueries,
     initialState: State,
-) {
+) : TrackingStateStore {
     private val _state = MutableStateFlow(initialState)
-    val state: StateFlow<State> = _state.asStateFlow()
+    override val state: StateFlow<State> = _state.asStateFlow()
 
-    suspend fun update(transform: (State) -> State) {
+    override suspend fun update(transform: (State) -> State) {
         val next = _state.updateAndGet(transform)
         withContext(Dispatchers.IO) {
             queries.saveState(Json.encodeToString(next))
