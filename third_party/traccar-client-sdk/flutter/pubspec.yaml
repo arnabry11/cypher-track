@@ -1,0 +1,26 @@
+name: traccar_client_sdk
+description: "Flutter plugin for background location tracking. Wraps the Traccar Client SDK for Android and iOS."
+version: 1.1.1
+repository: https://github.com/traccar/traccar-client-sdk
+
+environment:
+  sdk: ^3.13.0
+  flutter: '>=3.47.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: org.traccar.traccar_client_sdk
+        pluginClass: TraccarClientSdkPlugin
+      ios:
+        pluginClass: TraccarClientSdkPlugin
