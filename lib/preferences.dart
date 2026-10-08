@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_android/shared_preferences_android.dart';
 import 'package:traccar_client_sdk/traccar_client_sdk.dart';
@@ -21,6 +22,9 @@ class Preferences {
   static const String stopDetection = 'stop_detection';
   static const String preferPlatformProviders = 'prefer_platform_providers';
   static const String password = 'password';
+  static const String activeTripId = 'active_trip_id';
+  static const String activeTripStartedAt = 'active_trip_started_at';
+  static const String pendingTripMarkers = 'pending_trip_markers';
 
   static Future<void> init() async {
     _initFuture ??= _createInstance();
@@ -29,53 +33,67 @@ class Preferences {
 
   static Future<void> _createInstance() async {
     instance = await SharedPreferencesWithCache.create(
-      sharedPreferencesOptions: Platform.isAndroid
-          ? SharedPreferencesAsyncAndroidOptions(backend: SharedPreferencesAndroidBackendLibrary.SharedPreferences)
-          : SharedPreferencesOptions(),
+      sharedPreferencesOptions:
+          Platform.isAndroid
+              ? SharedPreferencesAsyncAndroidOptions(
+                backend:
+                    SharedPreferencesAndroidBackendLibrary.SharedPreferences,
+              )
+              : SharedPreferencesOptions(),
       cacheOptions: SharedPreferencesWithCacheOptions(
         allowList: {
-          id, url, accuracy, distance, interval, angle, heartbeat, buffer, wakelock, stopDetection, preferPlatformProviders, password,
+          id,
+          url,
+          accuracy,
+          distance,
+          interval,
+          angle,
+          heartbeat,
+          buffer,
+          wakelock,
+          stopDetection,
+          preferPlatformProviders,
+          password,
+          activeTripId,
+          activeTripStartedAt,
+          pendingTripMarkers,
         },
       ),
     );
     if (Platform.isAndroid) {
       for (final key in {interval, distance, angle, heartbeat}) {
         if (instance.get(key) is String) {
-          await instance.setInt(key, int.tryParse(instance.getString(key) ?? '') ?? 0);
+          await instance.setInt(
+            key,
+            int.tryParse(instance.getString(key) ?? '') ?? 0,
+          );
         }
       }
     }
     if (instance.getString(id) == null) {
-      await instance.setString(id, (Random().nextInt(90000000) + 10000000).toString());
-      await instance.setString(url, 'http://demo.traccar.org:5055');
-      await instance.setString(accuracy, 'medium');
-      await instance.setInt(interval, 300);
-      await instance.setInt(distance, 75);
-      await instance.setBool(buffer, true);
-      await instance.setBool(stopDetection, true);
+      await instance.setString(
+        id,
+        (Random.secure().nextInt(90000000) + 10000000).toString(),
+      );
     }
   }
 
   static Config buildConfig() {
+    const testDeviceId = String.fromEnvironment('CYPHER_TEST_DEVICE_ID');
     return Config(
-      serverUrl: instance.getString(url) ?? '',
-      deviceId: instance.getString(id) ?? '',
+      serverUrl: 'https://tracking.arnabroy.co.in/',
+      deviceId:
+          kDebugMode && testDeviceId.isNotEmpty
+              ? testDeviceId
+              : instance.getString(id) ?? '',
       location: LocationConfig(
-        accuracy: switch (instance.getString(accuracy)) {
-          'highest' => Accuracy.highest,
-          'high' => Accuracy.high,
-          'low' => Accuracy.low,
-          _ => Accuracy.medium,
-        },
-        distanceMeters: instance.getInt(distance) ?? 75,
-        intervalSeconds: instance.getInt(interval) ?? 300,
-        angleDegrees: instance.getInt(angle) ?? 0,
-        heartbeatIntervalSeconds: instance.getInt(heartbeat) ?? 0,
-        stopDetection: instance.getBool(stopDetection) ?? true,
+        accuracy: Accuracy.high,
+        distanceMeters: 50,
+        heartbeatIntervalSeconds: 0,
+        stopDetection: true,
       ),
-      wakeLock: instance.getBool(wakelock) ?? false,
-      buffer: instance.getBool(buffer) ?? true,
-      preferPlatformProviders: instance.getBool(preferPlatformProviders) ?? false,
+      buffer: true,
+      preferPlatformProviders: true,
     );
   }
 }

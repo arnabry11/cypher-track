@@ -1,133 +1,66 @@
-import 'dart:async';
-import 'dart:ui' show PlatformDispatcher;
-
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:app_links/app_links.dart';
-import 'package:rate_my_app/rate_my_app.dart';
-import 'package:traccar_client/password_service.dart';
-import 'package:traccar_client/push_service.dart';
-import 'package:traccar_client/quick_actions.dart';
 
-import 'configuration_service.dart';
 import 'geolocation_service.dart';
-import 'l10n/app_localizations.dart';
 import 'main_screen.dart';
-import 'managed_config_service.dart';
 import 'preferences.dart';
+import 'trip_controller.dart';
 
-final messengerKey = GlobalKey<ScaffoldMessengerState>();
-final navigatorKey = GlobalKey<NavigatorState>();
-final mainScreenKey = GlobalKey<MainScreenState>();
-
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
-  PlatformDispatcher.instance.onError = (error, stack) {
-    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-    return true;
-  };
   await Preferences.init();
-  await GeolocationService.tracker.init(Preferences.buildConfig());
-  await PasswordService.migrate();
-  await PushService.init();
-  await ManagedConfigService.init();
-  runApp(const MainApp());
+
+  final tracker = GeolocationService.tracker;
+  final config = Preferences.buildConfig();
+  await tracker.init(config);
+  final store = PreferencesTripStore(Preferences.instance);
+  if (store.activeTrip == null && await tracker.isTracking()) {
+    await tracker.stop();
+  }
+  await tracker.setConfig(config);
+
+  final trips = TripController(
+    tracker: SdkTripTracker(tracker),
+    store: store,
+    markerSender: OsmAndTripMarkerSender(
+      serverUrl: Uri.parse(config.serverUrl),
+      deviceId: config.deviceId,
+    ),
+  );
+  await trips.initialize();
+  runApp(CypherTrackApp(trips: trips, deviceId: config.deviceId));
 }
 
-class MainApp extends StatefulWidget {
-  const MainApp({super.key});
+class CypherTrackApp extends StatelessWidget {
+  const CypherTrackApp({
+    required this.trips,
+    required this.deviceId,
+    super.key,
+  });
+
+  final TripController trips;
+  final String deviceId;
 
   @override
-  State<MainApp> createState() => _MainAppState();
-}
-
-class _MainAppState extends State<MainApp> {
-  RateMyApp rateMyApp = RateMyApp(minDays: 0, minLaunches: 0);
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _initLinks();
-      await rateMyApp.init();
-      final dialogContext = navigatorKey.currentContext;
-      if (dialogContext != null && dialogContext.mounted && rateMyApp.shouldOpenDialog) {
-        await rateMyApp.showRateDialog(dialogContext);
-      }
-    });
-  }
-
-  Future<void> _initLinks() async {
-    AppLinks().uriLinkStream.listen(_handleUri);
-  }
-
-  Future<void> _handleUri(Uri uri) async {
-    if (uri.host == 'action') {
-      try {
-        switch (uri.pathSegments.firstOrNull) {
-          case 'start':
-            await GeolocationService.tracker.start();
-          case 'stop':
-            await GeolocationService.tracker.stop();
-        }
-      } on PlatformException {
-        // permission denied or startup error
-      }
-      return;
-    }
-    final context = navigatorKey.currentContext;
-    if (context == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        content: Text(AppLocalizations.of(context)!.configurationMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(AppLocalizations.of(context)!.cancelButton),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(AppLocalizations.of(context)!.okButton),
-          ),
-        ],
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Cypher Track',
+    debugShowCheckedModeBanner: false,
+    themeMode: ThemeMode.system,
+    theme: ThemeData(
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF006A61),
+        brightness: Brightness.light,
+        surface: const Color(0xFFF6F8F7),
       ),
-    );
-    if (confirmed == true) {
-      await ConfigurationService.applyUri(uri);
-      mainScreenKey.currentState?.refresh();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      scaffoldMessengerKey: messengerKey,
-      navigatorKey: navigatorKey,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.green,
-          brightness: Brightness.light,
-        ),
+      scaffoldBackgroundColor: const Color(0xFFE8EFF0),
+    ),
+    darkTheme: ThemeData(
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF81D8CB),
+        brightness: Brightness.dark,
+        surface: const Color(0xFF17242C),
       ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.green,
-          brightness: Brightness.dark,
-        ),
-      ),
-      home: Stack(
-        children: [
-          const QuickActionsInitializer(),
-          MainScreen(key: mainScreenKey),
-        ],
-      ),
-    );
-  }
+      scaffoldBackgroundColor: const Color(0xFF0D151B),
+    ),
+    home: MainScreen(trips: trips, deviceId: deviceId),
+  );
 }
