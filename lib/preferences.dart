@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_android/shared_preferences_android.dart';
 import 'package:traccar_client_sdk/traccar_client_sdk.dart';
@@ -83,13 +82,9 @@ class Preferences {
   }
 
   static Config buildConfig() {
-    const testDeviceId = String.fromEnvironment('CYPHER_TEST_DEVICE_ID');
     return Config(
       serverUrl: 'https://tracking.arnabroy.co.in/',
-      deviceId:
-          kDebugMode && testDeviceId.isNotEmpty
-              ? testDeviceId
-              : instance.getString(id) ?? '',
+      deviceId: instance.getString(id) ?? '',
       location: LocationConfig(
         accuracy: Accuracy.high,
         distanceMeters: 75,

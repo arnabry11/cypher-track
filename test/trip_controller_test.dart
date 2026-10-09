@@ -72,10 +72,9 @@ void main() {
     });
     await Preferences.init();
     final config = Preferences.buildConfig();
-    const testDeviceId = String.fromEnvironment('CYPHER_TEST_DEVICE_ID');
-
     expect(config.serverUrl, 'https://tracking.arnabroy.co.in/');
-    expect(config.deviceId, testDeviceId.isEmpty ? isNotEmpty : testDeviceId);
+    expect(config.deviceId, Preferences.instance.getString(Preferences.id));
+    expect(config.deviceId, matches(RegExp(r'^[1-9][0-9]{7}$')));
     expect(config.location.accuracy, Accuracy.high);
     expect(config.location.distanceMeters, 75);
     expect(config.location.heartbeatIntervalSeconds, 300);

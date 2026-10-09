@@ -46,6 +46,8 @@ android {
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }
+            // Keep the native SDK behavior aligned with the proven debug APK.
+            isMinifyEnabled = false
             isShrinkResources = false
         }
     }
